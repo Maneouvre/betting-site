@@ -117,9 +117,8 @@ function findFixture(string $id): ?array
 function betRecord(array $row): array
 {
     $stake = (int)$row['stake'];
-    $grossPot = $stake * 2;
-    $managerFee = (int)round($grossPot * MANAGER_FEE_PERCENT / 100, 0, PHP_ROUND_HALF_UP);
-    $netPayout = $grossPot - $managerFee;
+    $breakdown = payoutBreakdown($stake);
+    $winnerRecorded = in_array($row['status'], ['won', 'completed'], true);
     return [
         'id' => (int)$row['id'],
         'type' => $row['bet_type'],
@@ -144,27 +143,47 @@ function betRecord(array $row): array
         ] : null,
         'myReport' => $row['my_report'] ?? null,
         'opponentReport' => $row['opponent_report'] ?? null,
-        'grossPot' => $grossPot,
+        'grossPot' => $breakdown['grossPot'],
         'managerFeePercent' => MANAGER_FEE_PERCENT,
-        'managerFee' => in_array($row['status'], ['won', 'completed'], true) ? $managerFee : 0,
-        'potentialPayout' => $netPayout,
-        'payout' => in_array($row['status'], ['won', 'completed'], true) ? $netPayout : null,
-        'payoutSendMoneyFee' => in_array($row['status'], ['won', 'completed'], true) ? safaricomSendMoneyFee($netPayout) : null
+        'managerFee' => $winnerRecorded ? $breakdown['managerFee'] : 0,
+        'potentialManagerFee' => $breakdown['managerFee'],
+        'potentialPayout' => $breakdown['payout'],
+        'payout' => $winnerRecorded ? $breakdown['payout'] : null,
+        'payoutSendMoneyFee' => $winnerRecorded ? $breakdown['sendMoneyFee'] : null
+    ];
+}
+
+function payoutBreakdown(int $stake): array
+{
+    $grossPot = $stake * 2;
+    $managerFee = (int)round($grossPot * MANAGER_FEE_PERCENT / 100, 0, PHP_ROUND_HALF_UP);
+    $available = $grossPot - $managerFee;
+    $finalPayout = null;
+    $sendMoneyFee = null;
+
+    if ($available <= 250000) {
+        foreach (safaricomFeeBands() as $band) {
+            $candidate = min($band['max'], $available - $band['fee']);
+            if ($candidate >= $band['min'] && $candidate + $band['fee'] <= $available && ($finalPayout === null || $candidate > $finalPayout)) {
+                $finalPayout = $candidate;
+                $sendMoneyFee = $band['fee'];
+            }
+        }
+    }
+
+    return [
+        'grossPot' => $grossPot,
+        'managerFee' => $managerFee,
+        'sendMoneyFee' => $sendMoneyFee,
+        'payout' => $finalPayout
     ];
 }
 
 function safaricomSendMoneyFee(int $amount): ?int
 {
-    $bands = [
-        [1, 49, 0], [50, 100, 0], [101, 500, 7], [501, 1000, 13],
-        [1001, 1500, 23], [1501, 2500, 33], [2501, 3500, 53],
-        [3501, 5000, 57], [5001, 7500, 78], [7501, 10000, 90],
-        [10001, 15000, 100], [15001, 20000, 105],
-        [20001, 35000, 108], [35001, 50000, 108], [50001, 250000, 108]
-    ];
-    foreach ($bands as [$minimum, $maximum, $fee]) {
-        if ($amount >= $minimum && $amount <= $maximum) {
-            return $fee;
+    foreach (safaricomFeeBands() as $band) {
+        if ($amount >= $band['min'] && $amount <= $band['max']) {
+            return $band['fee'];
         }
     }
     return null;
@@ -347,7 +366,7 @@ try {
         respond([
             'managerFeePercent' => MANAGER_FEE_PERCENT,
             'sendMoneyBands' => safaricomFeeBands(),
-            'tariffNotice' => 'Send Money bands supplied by the operator; not independently verified with Safaricom for 2026. Till/Buy Goods charges are not included.'
+            'tariffNotice' => 'Send Money bands supplied by the user; not independently verified with Safaricom for 2026. Till/Buy Goods charges are not included. Fees are estimates only and are not deducted from the prize.'
         ]);
     }
 
@@ -696,6 +715,10 @@ try {
                 if ($bet['status'] !== 'won') {
                     $db->rollBack();
                     respond(['error' => 'Only an unpaid winner can be marked as paid out.'], 409);
+                }
+                if (payoutBreakdown((int)$bet['stake'])['payout'] === null) {
+                    $db->rollBack();
+                    respond(['error' => 'No Safaricom Send Money fee band is configured for this payout amount.'], 409);
                 }
                 $update = $db->prepare("UPDATE bets SET status = 'completed', payout_sent_at = UTC_TIMESTAMP() WHERE id = ?");
                 $update->execute([$betId]);

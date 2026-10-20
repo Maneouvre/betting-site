@@ -57,7 +57,7 @@
             <div class="hero-visual" aria-hidden="true">
               <div class="orb orb-one"></div><div class="orb orb-two"></div>
               <div class="hero-ball">⚽</div>
-              <div class="floating-card"><span class="floating-icon">↗</span><div><strong>2×</strong><small>potential payout</small></div></div>
+              <div class="floating-card"><span class="floating-icon">↗</span><div><strong>NET</strong><small>final payout after fees</small></div></div>
               <div class="hero-stat"><span class="stat-dot"></span> YOUR STAKE + MATE'S STAKE</div>
               <div class="hero-outline">PLAY<br>FAIR.</div>
             </div>
@@ -66,8 +66,8 @@
           <div class="stats-row">
             <div class="stat-item"><span class="stat-icon">◎</span><div><strong>1 : 1</strong><span>Equal stakes, every time</span></div></div>
             <div class="stat-item"><span class="stat-icon">◷</span><div><strong>30 min</strong><span>Football bets close before kick-off</span></div></div>
-            <div class="stat-item"><span class="stat-icon">◇</span><div><strong>0 fees</strong><span>No transaction or manager fee</span></div></div>
-            <div class="stat-item"><span class="stat-icon">↗</span><div><strong>2× stake</strong><span>Winner receives both matched stakes</span></div></div>
+            <div class="stat-item"><span class="stat-icon">◇</span><div><strong>10% fee</strong><span>Manager fee from matched pot</span></div></div>
+            <div class="stat-item"><span class="stat-icon">↗</span><div><strong>Net payout</strong><span>Manager and Send Money fees shown first</span></div></div>
           </div>
 
           <section class="section-block" id="fixtures">
@@ -87,9 +87,9 @@
             <div class="how-heading"><div class="eyebrow"><span class="eyebrow-line"></span> HOW IT WORKS</div><h2>Two players. One match.</h2></div>
             <div class="steps-grid">
               <article class="step-card"><span class="step-number">01</span><div class="step-icon">⌕</div><h3>Pick your side</h3><p>Choose a fixture and the result you believe in.</p></article>
-              <article class="step-card"><span class="step-number">02</span><div class="step-icon">⇄</div><h3>Find your mate</h3><p>We look for the other side at the exact same stake.</p></article>
+              <article class="step-card"><span class="step-number">02</span><div class="step-icon">⇄</div><h3>Find your mate</h3><p>Same game, exact stake, different pick. No Arsenal-vs-Arsenal or draw-vs-draw matches.</p></article>
               <article class="step-card"><span class="step-number">03</span><div class="step-icon">◷</div><h3>Pay before kick-off</h3><p>Only pay after a match is found. Football closes 30 minutes before start.</p></article>
-              <article class="step-card"><span class="step-number">04</span><div class="step-icon">✦</div><h3>Winner takes 2×</h3><p>Both stakes go to the winner. No fees; payout is sent manually.</p></article>
+              <article class="step-card"><span class="step-number">04</span><div class="step-icon">✦</div><h3>See the final payout</h3><p>The 10% manager fee and estimated Send Money fee are deducted before your expected amount is shown.</p></article>
             </div>
           </section>
         </section>
@@ -108,7 +108,7 @@
                 <label for="konami-stake">Stake amount <span class="label-hint">KES · minimum 50</span></label>
                 <div class="input-wrap"><span class="currency">KES</span><input id="konami-stake" type="number" min="50" step="1" value="500" required></div>
                 <div class="stake-presets"><button type="button" data-stake="200">200</button><button type="button" data-stake="500">500</button><button type="button" data-stake="1000">1,000</button></div>
-                <div class="payout-preview"><span>Potential winner payout</span><strong id="konami-payout">KES 1,000</strong></div>
+                <div class="payout-preview"><span>Final amount to expect after all fees</span><strong id="konami-payout">KES 887</strong></div>
                 <button class="primary-button full-button" type="submit">Find me a player <span>→</span></button>
                 <p class="form-footnote">A match is not confirmed until the other player stakes the same amount.</p>
               </form>
@@ -134,6 +134,7 @@
           </div>
           <div class="my-bets-toolbar"><div class="tab-group"><button class="bet-tab active" data-bet-filter="all">All bets</button><button class="bet-tab" data-bet-filter="active">Active</button><button class="bet-tab" data-bet-filter="won">Won</button></div><span class="muted" id="bet-summary"></span></div>
           <div class="player-totals" id="player-totals"></div>
+          <div class="admin-disclaimer" id="fee-notice"></div>
           <div id="my-bets-list" class="bets-list"></div>
         </section>
 
@@ -146,7 +147,8 @@
             <div class="admin-stat-card"><span>OPEN MATCHES</span><strong id="admin-open">0</strong><small>Awaiting a player</small></div>
             <div class="admin-stat-card"><span>PAYMENT REVIEW</span><strong id="admin-payment">0</strong><small>References awaiting admin approval</small></div>
             <div class="admin-stat-card"><span>WINNERS TO PAY</span><strong id="admin-winners">0</strong><small>Manual payout required</small></div>
-            <div class="admin-stat-card accent-stat"><span>TOTAL TO PAY</span><strong id="admin-total">KES 0</strong><small>No fees deducted</small></div>
+            <div class="admin-stat-card"><span>MANAGER FEES EARNED</span><strong id="admin-fees">KES 0</strong><small>10% of resolved winning pots</small></div>
+            <div class="admin-stat-card accent-stat"><span>TOTAL TO PAY</span><strong id="admin-total">KES 0</strong><small>After 10% manager fee</small></div>
           </div>
           <div class="admin-toolbar"><div><h2>Winner payouts</h2><p>Winner and opponent details are visible to the admin.</p></div><button class="secondary-button" id="export-winners">↓ Export list</button></div>
           <div class="table-wrap"><table class="admin-table"><thead><tr><th>WINNER / ACCOUNT</th><th>LOSING OPPONENT</th><th>BET</th><th>MANAGER FEE</th><th>AMOUNT TO RECEIVE</th><th>SEND MONEY FEE</th><th>M-PESA DETAILS</th><th>STATUS</th><th></th></tr></thead><tbody id="winners-table"></tbody></table></div>
@@ -155,7 +157,7 @@
           <div class="admin-disclaimer">This prototype stores records in MySQL. Payment references must be checked manually in the M-Pesa account; no payment is initiated or automatically verified. Player result agreement is not independent proof of an eFootball result.</div>
         </section>
 
-        <footer class="site-footer"><span>match<span class="brand-light">mate</span> <span class="footer-copy">· Play fair. Win together.</span></span><span>DEMO EXPERIENCE · NO REAL MONEY</span></footer>
+        <footer class="site-footer"><span>match<span class="brand-light">mate</span> <span class="footer-copy">· Play fair. Win together.</span> · <a href="terms.html">Terms &amp; Conditions</a></span><span>DEMO EXPERIENCE · NO REAL MONEY</span></footer>
       </main>
     </div>
     <div id="modal-root"></div>

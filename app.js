@@ -3,6 +3,7 @@ let fixtures = [];
 let bets = [];
 let adminBets = [];
 let sendMoneyBands = [];
+let managerFeePercent = 10;
 let tariffNotice = "";
 let activeBetFilter = "all";
 let fixtureFilter = "all";
@@ -42,9 +43,24 @@ function estimateSendMoneyFee(amount) {
 
 function payoutBreakdown(stake) {
   const gross = Number(stake) * 2;
-  const managerFee = Math.round(gross * 0.1);
-  const payout = gross - managerFee;
-  return { gross, managerFee, payout, sendMoneyFee: estimateSendMoneyFee(payout) };
+  const managerFee = Math.round(gross * managerFeePercent / 100);
+  const available = gross - managerFee;
+  let payout = null;
+  let sendMoneyFee = null;
+  if (available <= 250000) {
+    sendMoneyBands.forEach(band => {
+      const candidate = Math.min(Number(band.max), available - Number(band.fee));
+      if (candidate >= Number(band.min) && candidate + Number(band.fee) <= available && (payout === null || candidate > payout)) {
+        payout = candidate;
+        sendMoneyFee = Number(band.fee);
+      }
+    });
+  }
+  return { gross, managerFee, payout, sendMoneyFee };
+}
+
+function payoutText(amount) {
+  return amount === null ? "Tariff unavailable" : money(amount);
 }
 
 function transferFeeLabel(amount) {
@@ -243,13 +259,13 @@ function openFootballBet(fixtureId) {
         <option value="Draw">Draw</option>
       </select></label>
       <label>Stake amount · KES · minimum 50<input class="form-control" name="stake" type="number" min="50" step="1" value="500" required></label>
-      <div class="modal-summary"><span>Potential winner payout</span><strong id="football-payout">KES 1,000</strong></div>
+      <div class="modal-summary"><span>Final amount to expect after fees</span><strong id="football-payout">KES 887</strong></div>
       <div class="demo-payment-box"><strong>Same fixture + same stake.</strong> Payment is available only after another account is matched. No match? No payment request.</div>
       <button class="primary-button" type="submit">Find a matching player <span>→</span></button>
     </form>`);
   const form = document.getElementById("football-form");
   form.elements.stake.addEventListener("input", () => {
-    document.getElementById("football-payout").textContent = money(Number(form.elements.stake.value) * 2);
+    document.getElementById("football-payout").textContent = payoutText(payoutBreakdown(Number(form.elements.stake.value)).payout);
   });
   form.addEventListener("submit", event => {
     event.preventDefault();
@@ -307,7 +323,7 @@ function openPaymentModal(betId) {
     <label>Payment method<select class="form-control" name="paymentMethod" required><option value="send_money">M-Pesa Send Money</option><option value="till">Till / Buy Goods</option></select></label>
     <div class="modal-summary"><span id="stake-fee-label">Estimated Send Money fee on your stake</span><strong id="stake-fee-value">${transferFeeLabel(bet.stake)}</strong></div>
     <label>M-Pesa transaction reference<input class="form-control" name="paymentReference" required minlength="6" maxlength="40" pattern="[A-Za-z0-9-]{6,40}" placeholder="For example, QWE12RTY34"></label>
-    <div class="demo-payment-box">The Send Money estimate uses the supplied bands, is paid separately, and is not deducted from the prize. Till charges were not supplied. Admin must check the actual reference.</div>
+    <div class="demo-payment-box">The Send Money charge on this stake is separate. The estimated fee for sending the eventual prize is deducted before the final payout is shown. Till charges were not supplied. Admin must check the actual reference.</div>
     <button class="primary-button" type="submit">Submit reference for approval <span>→</span></button>
     </form>`);
   const paymentMethod = document.querySelector('#payment-form [name="paymentMethod"]');
@@ -413,11 +429,12 @@ function renderMyBets() {
     (activeBetFilter === "won" && ["won", "completed"].includes(bet.status)));
   document.getElementById("bet-summary").textContent = `${bets.length} bet${bets.length === 1 ? "" : "s"} total`;
   const totalStaked = bets.reduce((sum, bet) => sum + Number(bet.stake), 0);
-  const payoutDue = bets.filter(bet => bet.status === "won").reduce((sum, bet) => sum + Number(bet.payout), 0);
+  const dueBets = bets.filter(bet => bet.status === "won");
+  const payoutDue = dueBets.reduce((sum, bet) => sum + Number(bet.payout || 0), 0);
   const paidOut = bets.filter(bet => bet.status === "completed").reduce((sum, bet) => sum + Number(bet.payout), 0);
   document.getElementById("player-totals").innerHTML = `
     <div class="player-total-card"><span>TOTAL STAKES · ALL ROUNDS</span><strong>${money(totalStaked)}</strong></div>
-    <div class="player-total-card due"><span>PAYOUT DUE</span><strong>${money(payoutDue)}</strong></div>
+    <div class="player-total-card due"><span>PAYOUT DUE</span><strong>${dueBets.some(bet => bet.payout === null) ? "Tariff unavailable" : money(payoutDue)}</strong></div>
     <div class="player-total-card"><span>PAID OUT</span><strong>${money(paidOut)}</strong></div>`;
   const feeNotice = document.getElementById("fee-notice");
   if (feeNotice) feeNotice.textContent = tariffNotice;
@@ -437,8 +454,8 @@ function renderMyBets() {
       ? `<div class="bet-card-sub">${escapeHtml(resultLabel(bet.myReport))} · ${escapeHtml(bet.opponentReport ? "Opponent reported" : "Waiting for opponent result")}</div>` : "";
     const breakdown = payoutBreakdown(bet.stake);
     const payout = ["won", "completed"].includes(bet.status)
-      ? `<div class="bet-meta"><span class="bet-meta-label">PAYOUT · AFTER 10% FEE</span><strong style="color:var(--green)">${money(bet.payout)}</strong><span class="bet-card-sub">Fee ${money(bet.managerFee)} · Send Money est. ${bet.payoutSendMoneyFee === null ? "n/a" : money(bet.payoutSendMoneyFee)}</span></div>`
-      : `<div class="bet-meta"><span class="bet-meta-label">POTENTIAL WIN · AFTER 10%</span><strong>${money(breakdown.payout)}</strong><span class="bet-card-sub">Gross ${money(breakdown.gross)} · Fee ${money(breakdown.managerFee)}</span></div>`;
+      ? `<div class="bet-meta"><span class="bet-meta-label">FINAL PAYOUT · AFTER ALL FEES</span><strong style="color:var(--green)">${payoutText(bet.payout)}</strong><span class="bet-card-sub">Manager ${money(bet.managerFee)} · Send Money ${bet.payoutSendMoneyFee === null ? "n/a" : money(bet.payoutSendMoneyFee)}</span></div>`
+      : `<div class="bet-meta"><span class="bet-meta-label">FINAL AMOUNT TO EXPECT</span><strong>${payoutText(breakdown.payout)}</strong><span class="bet-card-sub">Gross ${money(breakdown.gross)} · Manager ${money(breakdown.managerFee)} · Send Money ${breakdown.sendMoneyFee === null ? "n/a" : money(breakdown.sendMoneyFee)}</span></div>`;
     const paymentInfo = bet.userPaid ? `<div class="bet-card-sub">${bet.paymentApproved ? "Payment approved by admin" : "Payment reference submitted · awaiting admin approval"}</div>` : "";
     return `<article class="bet-card">
       <div><div class="bet-card-title">${escapeHtml(title)}</div><div class="bet-card-sub">${escapeHtml(detail)}${bet.opponent ? ` · vs ${escapeHtml(bet.opponent.name)}` : " · Waiting for an equal-stake opponent"}</div>${reportInfo}</div>
@@ -461,17 +478,17 @@ function smsLink(phone, message) {
 function winnerRow(bet) {
   const winner = bet.player;
   const opponent = bet.opponent || { name: "Opponent", account: "—" };
-  const message = `Hello ${winner.name}, your MatchMate ${bet.type === "konami" ? "eFootball" : "football"} win has been sent manually. Account: ${winner.account}. Bet: ${money(bet.stake)}. Manager fee: ${money(bet.managerFee)}. Amount sent: ${money(bet.payout)}. Opponent: ${opponent.name}.`;
+  const message = `Hello ${winner.name}, your MatchMate ${bet.type === "konami" ? "eFootball" : "football"} win has been sent manually. Account: ${winner.account}. Bet: ${money(bet.stake)}. Manager fee: ${money(bet.managerFee)}. Amount sent: ${payoutText(bet.payout)}. Opponent: ${opponent.name}.`;
   return `<tr>
     <td><div class="person-cell"><strong>${escapeHtml(winner.name)}</strong><small>${escapeHtml(winner.account)}</small></div></td>
     <td><div class="person-cell"><strong>${escapeHtml(opponent.name)}</strong><small>${escapeHtml(opponent.account)}</small></div></td>
     <td>${money(bet.stake)}<br><small class="bet-card-sub">${escapeHtml(bet.type === "konami" ? "eFootball" : `${bet.home || ""} vs ${bet.away || ""}`)}</small></td>
-    <td>${money(bet.managerFee)}<br><small class="bet-card-sub">10% of pot</small></td>
-    <td class="money-cell">${money(bet.payout)}</td>
-    <td>${bet.payoutSendMoneyFee === null ? "Not in bands" : money(bet.payoutSendMoneyFee)}<br><small class="bet-card-sub">paid separately</small></td>
+    <td>${money(bet.managerFee)}<br><small class="bet-card-sub">${bet.managerFeePercent}% of pot</small></td>
+    <td class="money-cell">${payoutText(bet.payout)}</td>
+    <td>${bet.payoutSendMoneyFee === null ? "Not in bands" : money(bet.payoutSendMoneyFee)}<br><small class="bet-card-sub">deducted before payout</small></td>
     <td><div class="person-cell"><strong>${escapeHtml(winner.name)}</strong><small>${escapeHtml(winner.phone)}</small></div></td>
     <td><span class="status-badge status-${escapeHtml(bet.status)}">${bet.status === "completed" ? "Sent" : "Payout due"}</span></td>
-    <td>${bet.status === "won" ? `<a class="table-action" href="${escapeHtml(whatsappLink(winner.phone, message))}" target="_blank" rel="noopener">WhatsApp</a> <a class="table-action" href="${escapeHtml(smsLink(winner.phone, message))}">SMS</a> <button class="table-action" data-mark-sent="${escapeHtml(bet.id)}">Mark sent</button>` : ""}</td>
+    <td>${bet.status === "won" && bet.payout !== null ? `<a class="table-action" href="${escapeHtml(whatsappLink(winner.phone, message))}" target="_blank" rel="noopener">WhatsApp</a> <a class="table-action" href="${escapeHtml(smsLink(winner.phone, message))}">SMS</a> <button class="table-action" data-mark-sent="${escapeHtml(bet.id)}">Mark sent</button>` : ""}</td>
   </tr>`;
 }
 
@@ -490,7 +507,10 @@ function renderAdmin() {
   document.getElementById("admin-open").textContent = open.length;
   document.getElementById("admin-payment").textContent = awaiting.length;
   document.getElementById("admin-winners").textContent = winners.filter(bet => bet.status === "won").length;
-  document.getElementById("admin-total").textContent = money(winners.filter(bet => bet.status === "won").reduce((sum, bet) => sum + Number(bet.payout), 0));
+  const payoutDueRows = winners.filter(bet => bet.status === "won");
+  document.getElementById("admin-total").textContent = payoutDueRows.some(bet => bet.payout === null)
+    ? "Fee bands needed"
+    : money(payoutDueRows.reduce((sum, bet) => sum + Number(bet.payout), 0));
   document.getElementById("admin-fees").textContent = money(winners.reduce((sum, bet) => sum + Number(bet.managerFee), 0));
 
   const winnerTable = document.getElementById("winners-table");
@@ -576,7 +596,7 @@ function openResolveModal(betId) {
       closeModal();
       await refreshAdmin();
       await refreshBets();
-      showToast(winnerBetId === "tie" ? "Tie recorded. Refund both stakes, then mark them sent." : "Winner recorded. The 2× amount is due manually.");
+      showToast(winnerBetId === "tie" ? "Tie recorded. Refund both stakes, then mark them sent." : "Winner recorded. The net amount after the 10% manager fee is due manually.");
     });
   });
 }
@@ -688,7 +708,7 @@ document.getElementById("konami-form").addEventListener("submit", event => {
   openKonamiChallenge();
 });
 document.getElementById("konami-stake").addEventListener("input", event => {
-  document.getElementById("konami-payout").textContent = money(Number(event.target.value) * 2);
+  document.getElementById("konami-payout").textContent = payoutText(payoutBreakdown(Number(event.target.value)).payout);
 });
 document.getElementById("top-account-button").addEventListener("click", () => {
   if (currentUser) setActiveView("my-bets");
@@ -717,11 +737,11 @@ document.getElementById("export-winners").addEventListener("click", () => {
     showToast("There are no winner records to export yet.");
     return;
   }
-  const rows = [["Winner", "Registration account", "M-Pesa name", "M-Pesa number", "Opponent", "Opponent account", "Type", "Stake KES", "Amount to receive KES", "Status"]];
+  const rows = [["Winner", "Registration account", "M-Pesa name", "M-Pesa number", "Opponent", "Opponent account", "Type", "Stake KES", "Manager fee KES", "Amount to receive KES", "Send Money fee estimate KES", "Status"]];
   winners.forEach(bet => rows.push([
     bet.player.name, bet.player.account, bet.player.name, bet.player.phone,
     bet.opponent?.name || "", bet.opponent?.account || "", bet.type, bet.stake,
-    bet.stake * 2, bet.status === "completed" ? "Sent" : "Payout due"
+    bet.managerFee, bet.payout, bet.payoutSendMoneyFee ?? "Not in supplied bands", bet.status === "completed" ? "Sent" : "Payout due"
   ]));
   const csv = rows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const link = document.createElement("a");
@@ -734,9 +754,12 @@ document.getElementById("export-winners").addEventListener("click", () => {
 
 async function initialize() {
   try {
-    const [session, fixtureData] = await Promise.all([api("auth.session"), api("fixtures.list")]);
+    const [session, fixtureData, feeData] = await Promise.all([api("auth.session"), api("fixtures.list"), api("fees.list")]);
     currentUser = session.user;
     fixtures = fixtureData.fixtures;
+    sendMoneyBands = feeData.sendMoneyBands;
+    managerFeePercent = Number(feeData.managerFeePercent);
+    tariffNotice = feeData.tariffNotice;
     renderFixtures();
     renderAccount();
     await refreshBets();
