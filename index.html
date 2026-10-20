@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#08120f">
+    <title>MatchMate — Play fair. Win together.</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#" aria-label="MatchMate home">
+          <span class="brand-mark">M</span><span>match<span class="brand-light">mate</span></span>
+        </a>
+        <div class="sidebar-label">PLAY</div>
+        <nav class="main-nav" aria-label="Main navigation">
+          <button class="nav-item active" data-view="football"><span class="nav-icon">◉</span> Football bets</button>
+          <button class="nav-item" data-view="konami"><span class="nav-icon">⌘</span> eFootball 1v1</button>
+          <button class="nav-item" data-view="my-bets"><span class="nav-icon">▤</span> My bets <span class="nav-count" id="my-bets-count">0</span></button>
+        </nav>
+        <div class="sidebar-label admin-label">MANAGE</div>
+        <nav class="main-nav" aria-label="Management">
+          <button class="nav-item" data-view="admin"><span class="nav-icon">▦</span> Admin dashboard</button>
+        </nav>
+        <div class="sidebar-spacer"></div>
+        <div class="account-card">
+          <div class="avatar" id="sidebar-avatar">?</div>
+          <div class="account-summary"><strong id="sidebar-name">Guest player</strong><span id="sidebar-account">Register to get started</span></div>
+          <button class="icon-button" id="account-button" aria-label="Account options">⋯</button>
+        </div>
+        <div class="sidebar-foot">DEMO MODE <span class="live-dot"></span></div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="mobile-brand"><span class="brand-mark">M</span> matchmate</div>
+          <div class="topbar-note"><span class="live-dot"></span> Peer-to-peer play, made simple</div>
+          <button class="top-account" id="top-account-button">Sign in <span>↗</span></button>
+        </header>
+
+        <div class="demo-banner">
+          <span class="demo-badge">DEMO</span>
+          <span>Sample fixtures and simulated payments. No real money is collected or transferred.</span>
+          <button id="banner-dismiss" aria-label="Dismiss notice">×</button>
+        </div>
+
+        <section class="view active" id="view-football">
+          <div class="hero">
+            <div class="hero-copy">
+              <div class="eyebrow"><span class="eyebrow-line"></span> THE NEXT MATCH IS YOURS</div>
+              <h1>Good games.<br><span>Better mates.</span></h1>
+              <p>Pick a fixture, match with a player staking the same amount, and let the game do the talking.</p>
+              <button class="primary-button" data-scroll="fixtures">Find a football match <span>↓</span></button>
+            </div>
+            <div class="hero-visual" aria-hidden="true">
+              <div class="orb orb-one"></div><div class="orb orb-two"></div>
+              <div class="hero-ball">⚽</div>
+              <div class="floating-card"><span class="floating-icon">↗</span><div><strong>2×</strong><small>potential payout</small></div></div>
+              <div class="hero-stat"><span class="stat-dot"></span> YOUR STAKE + MATE'S STAKE</div>
+              <div class="hero-outline">PLAY<br>FAIR.</div>
+            </div>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-item"><span class="stat-icon">◎</span><div><strong>1 : 1</strong><span>Equal stakes, every time</span></div></div>
+            <div class="stat-item"><span class="stat-icon">◷</span><div><strong>30 min</strong><span>Football bets close before kick-off</span></div></div>
+            <div class="stat-item"><span class="stat-icon">◇</span><div><strong>0 fees</strong><span>No transaction or manager fee</span></div></div>
+            <div class="stat-item"><span class="stat-icon">↗</span><div><strong>2× stake</strong><span>Winner receives both matched stakes</span></div></div>
+          </div>
+
+          <section class="section-block" id="fixtures">
+            <div class="section-heading">
+              <div><div class="eyebrow"><span class="eyebrow-line"></span> FOOTBALL</div><h2>Find your fixture</h2></div>
+              <div class="fixture-filters" role="group" aria-label="Fixture filters">
+                <button class="filter-chip active" data-filter="all">All matches</button>
+                <button class="filter-chip" data-filter="today">Today</button>
+                <button class="filter-chip" data-filter="tomorrow">Tomorrow</button>
+              </div>
+            </div>
+            <div class="fixture-note"><span>ⓘ</span> These are sample matches for this demo, not live fixtures.</div>
+            <div class="fixture-grid" id="fixture-grid"></div>
+          </section>
+
+          <section class="how-section">
+            <div class="how-heading"><div class="eyebrow"><span class="eyebrow-line"></span> HOW IT WORKS</div><h2>Two players. One match.</h2></div>
+            <div class="steps-grid">
+              <article class="step-card"><span class="step-number">01</span><div class="step-icon">⌕</div><h3>Pick your side</h3><p>Choose a fixture and the result you believe in.</p></article>
+              <article class="step-card"><span class="step-number">02</span><div class="step-icon">⇄</div><h3>Find your mate</h3><p>We look for the other side at the exact same stake.</p></article>
+              <article class="step-card"><span class="step-number">03</span><div class="step-icon">◷</div><h3>Pay before kick-off</h3><p>Only pay after a match is found. Football closes 30 minutes before start.</p></article>
+              <article class="step-card"><span class="step-number">04</span><div class="step-icon">✦</div><h3>Winner takes 2×</h3><p>Both stakes go to the winner. No fees; payout is sent manually.</p></article>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-konami">
+          <div class="page-heading">
+            <div><div class="eyebrow"><span class="eyebrow-line"></span> KONAMI · eFOOTBALL</div><h1>Find your 1v1.</h1><p>Challenge another eFootball player. Set your stake, match up, then exchange your room code.</p></div>
+            <div class="heading-stamp">5<span>MIN</span><small>payment window</small></div>
+          </div>
+          <div class="konami-layout">
+            <div class="panel konami-panel">
+              <div class="panel-top"><span class="panel-kicker">NEW CHALLENGE</span><span class="pill pill-green">eFootball</span></div>
+              <h2>Ready when you are.</h2>
+              <p class="muted">We’ll find a player who wants the same stake. Once matched, both players pay and share their in-game room code before playing.</p>
+              <form id="konami-form" class="bet-form">
+                <label for="konami-stake">Stake amount <span class="label-hint">KES · minimum 50</span></label>
+                <div class="input-wrap"><span class="currency">KES</span><input id="konami-stake" type="number" min="50" step="1" value="500" required></div>
+                <div class="stake-presets"><button type="button" data-stake="200">200</button><button type="button" data-stake="500">500</button><button type="button" data-stake="1000">1,000</button></div>
+                <div class="payout-preview"><span>Potential winner payout</span><strong id="konami-payout">KES 1,000</strong></div>
+                <button class="primary-button full-button" type="submit">Find me a player <span>→</span></button>
+                <p class="form-footnote">A match is not confirmed until the other player stakes the same amount.</p>
+              </form>
+            </div>
+            <div class="konami-side">
+              <div class="panel info-panel">
+                <div class="info-icon">⌘</div><div class="eyebrow">YOUR GAME, YOUR RULES</div><h3>Play on eFootball</h3>
+                <p>Matched players connect in the eFootball app. The demo can’t create game rooms or verify results automatically.</p>
+              </div>
+              <div class="timeline-panel">
+                <h3>Match flow <span class="mini-status">5 MIN TO PAY</span></h3>
+                <div class="timeline-step"><span class="timeline-number">1</span><div><strong>Get matched</strong><small>Same stake, another player</small></div></div>
+                <div class="timeline-step"><span class="timeline-number">2</span><div><strong>Pay &amp; share code</strong><small>Pay, then send your eFootball room code</small></div></div>
+                <div class="timeline-step"><span class="timeline-number">3</span><div><strong>Play &amp; report</strong><small>Admin confirms the result in this demo</small></div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-my-bets">
+          <div class="page-heading">
+            <div><div class="eyebrow"><span class="eyebrow-line"></span> YOUR ACTIVITY</div><h1>My bets<span class="heading-period">.</span></h1><p>Track your matches, payment steps, and any winnings.</p></div>
+          </div>
+          <div class="my-bets-toolbar"><div class="tab-group"><button class="bet-tab active" data-bet-filter="all">All bets</button><button class="bet-tab" data-bet-filter="active">Active</button><button class="bet-tab" data-bet-filter="won">Won</button></div><span class="muted" id="bet-summary"></span></div>
+          <div class="player-totals" id="player-totals"></div>
+          <div id="my-bets-list" class="bets-list"></div>
+        </section>
+
+        <section class="view" id="view-admin">
+          <div class="page-heading admin-page-heading">
+            <div><div class="eyebrow"><span class="eyebrow-line"></span> OPERATIONS</div><h1>Admin overview<span class="heading-period">.</span></h1><p>Review matches, confirm results, and track manual payouts.</p></div>
+            <div class="admin-demo-pill"><span class="live-dot"></span> LOCAL DEMO DATA</div>
+          </div>
+          <div class="admin-stats">
+            <div class="admin-stat-card"><span>OPEN MATCHES</span><strong id="admin-open">0</strong><small>Awaiting a player</small></div>
+            <div class="admin-stat-card"><span>PAYMENT REVIEW</span><strong id="admin-payment">0</strong><small>References awaiting admin approval</small></div>
+            <div class="admin-stat-card"><span>WINNERS TO PAY</span><strong id="admin-winners">0</strong><small>Manual payout required</small></div>
+            <div class="admin-stat-card accent-stat"><span>TOTAL TO PAY</span><strong id="admin-total">KES 0</strong><small>No fees deducted</small></div>
+          </div>
+          <div class="admin-toolbar"><div><h2>Winner payouts</h2><p>Winner and opponent details are visible to the admin.</p></div><button class="secondary-button" id="export-winners">↓ Export list</button></div>
+          <div class="table-wrap"><table class="admin-table"><thead><tr><th>WINNER / ACCOUNT</th><th>LOSING OPPONENT</th><th>BET</th><th>MANAGER FEE</th><th>AMOUNT TO RECEIVE</th><th>SEND MONEY FEE</th><th>M-PESA DETAILS</th><th>STATUS</th><th></th></tr></thead><tbody id="winners-table"></tbody></table></div>
+          <div class="admin-toolbar queue-toolbar"><div><h2>Matched players &amp; payment review</h2><p>Players are paired before payment. Both equal stakes and payment references are shown together.</p></div></div>
+          <div class="table-wrap"><table class="admin-table queue-table"><thead><tr><th>PLAYER / ACCOUNT</th><th>TYPE</th><th>FIXTURE / RESULT CLAIM</th><th>OPPONENT</th><th>STAKE EACH</th><th>PAYMENT REFERENCES</th><th>MATCH STATUS</th><th>ADMIN ACTION</th></tr></thead><tbody id="queue-table"></tbody></table></div>
+          <div class="admin-disclaimer">This prototype stores records in MySQL. Payment references must be checked manually in the M-Pesa account; no payment is initiated or automatically verified. Player result agreement is not independent proof of an eFootball result.</div>
+        </section>
+
+        <footer class="site-footer"><span>match<span class="brand-light">mate</span> <span class="footer-copy">· Play fair. Win together.</span></span><span>DEMO EXPERIENCE · NO REAL MONEY</span></footer>
+      </main>
+    </div>
+    <div id="modal-root"></div>
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  </body>
+</html>
