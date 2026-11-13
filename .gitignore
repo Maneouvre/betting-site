@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+config.local.php
+*.sql.bak
+*.sql.old
+*.sql
+*.dump
+*.sqlite
+*.db
+*.backup
+*.bak
+*.log
+*.swp
+*.orig
+*.pem
+*.key

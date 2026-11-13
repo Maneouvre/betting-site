@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/config.php';
 date_default_timezone_set('UTC');
 const MANAGER_FEE_PERCENT = 10;
+const TERMS_VERSION = '2026-10-20-demo-5';
 
 ini_set('session.use_strict_mode', '1');
 session_set_cookie_params([
@@ -14,6 +15,9 @@ session_set_cookie_params([
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: strict-origin-when-cross-origin');
 
 function respond(array $payload, int $status = 200): void
 {
@@ -125,11 +129,15 @@ function betRecord(array $row): array
         'fixtureId' => $row['fixture_id'],
         'home' => $row['fixture_home'],
         'away' => $row['fixture_away'],
+        'teamName' => $row['team_name'] ?? null,
+        'teamStrength' => isset($row['team_strength']) ? (int)$row['team_strength'] : null,
         'kickoff' => $row['kickoff_at'] ? strtotime($row['kickoff_at']) * 1000 : null,
         'pick' => $row['selection'],
         'stake' => $stake,
         'status' => $row['status'],
         'userPaid' => (bool)$row['user_paid'],
+        'paidFromRegisteredNumber' => (bool)$row['paid_from_registered_number'],
+        'paymentSenderName' => $row['payment_sender_name'] ?? null,
         'paymentApproved' => (bool)$row['payment_approved'],
         'paymentMethod' => $row['payment_method'],
         'paymentReference' => $row['payment_reference'],
@@ -238,8 +246,10 @@ function refreshBetStatuses(PDO $db, int $id): void
         return;
     }
 
+    $bothPaymentsApproved = (bool)$bet['user_paid'] && (bool)$bet['payment_approved']
+        && (bool)$opponent['user_paid'] && (bool)$opponent['payment_approved'];
     foreach ([$bet, $opponent] as $participant) {
-        $status = !(bool)$participant['user_paid'] || !(bool)$participant['payment_approved']
+        $status = !$bothPaymentsApproved
             ? 'awaiting_payment'
             : ($participant['bet_type'] === 'konami' && !$participant['room_code'] ? 'awaiting_code' : 'paid');
         $update = $db->prepare('UPDATE bets SET status = ? WHERE id = ?');
@@ -304,8 +314,8 @@ try {
         $name = trim((string)($data['name'] ?? ''));
         $phone = trim((string)($data['phone'] ?? ''));
         $password = (string)($data['password'] ?? '');
-        if (mb_strlen($name) < 2 || mb_strlen($name) > 100 || strlen(preg_replace('/\D/', '', $phone)) < 9 || strlen($password) < 8 || strlen($password) > 200) {
-            respond(['error' => 'Enter your name, a valid M-Pesa number, and a password with at least 8 characters.'], 422);
+        if (mb_strlen($name) < 2 || mb_strlen($name) > 100 || strlen(preg_replace('/\D/', '', $phone)) < 9 || strlen($password) < 8 || strlen($password) > 200 || ($data['termsAccepted'] ?? false) !== true) {
+            respond(['error' => 'Enter your name, a valid M-Pesa number, a password with at least 8 characters, and accept the Terms & Conditions.'], 422);
         }
         $account = '';
         for ($attempt = 0; $attempt < 5; $attempt++) {
@@ -320,8 +330,8 @@ try {
         if ($account === '') {
             respond(['error' => 'Could not assign an account number. Please try again.'], 500);
         }
-        $insert = $db->prepare('INSERT INTO users (account_number, full_name, mpesa_phone, password_hash) VALUES (?, ?, ?, ?)');
-        $insert->execute([$account, $name, $phone, password_hash($password, PASSWORD_DEFAULT)]);
+        $insert = $db->prepare('INSERT INTO users (account_number, full_name, mpesa_phone, password_hash, terms_accepted_at, terms_version) VALUES (?, ?, ?, ?, UTC_TIMESTAMP(), ?)');
+        $insert->execute([$account, $name, $phone, password_hash($password, PASSWORD_DEFAULT), TERMS_VERSION]);
         session_regenerate_id(true);
         $_SESSION['user_id'] = (int)$db->lastInsertId();
         $query = $db->prepare('SELECT id, account_number, full_name, mpesa_phone, role FROM users WHERE id = ?');
@@ -373,9 +383,10 @@ try {
     if ($action === 'bets.list') {
         $user = requirePlayer($db);
         $query = $db->prepare(
-            'SELECT b.*, other.id AS opponent_id, u.account_number AS opponent_account,
-                    u.full_name AS opponent_name, own_report.claimed_result AS my_report,
-                    opponent_report.claimed_result AS opponent_report
+            'SELECT b.*, other.id AS opponent_id, other.room_code AS opponent_room_code,
+                    other.payment_approved AS opponent_payment_approved,
+                    u.account_number AS opponent_account, u.full_name AS opponent_name,
+                    own_report.claimed_result AS my_report, opponent_report.claimed_result AS opponent_report
              FROM bets b
              LEFT JOIN bets other ON other.id = b.matched_bet_id
              LEFT JOIN users u ON u.id = other.user_id
@@ -385,7 +396,19 @@ try {
              ORDER BY b.created_at DESC, b.id DESC'
         );
         $query->execute([$user['id']]);
-        respond(['bets' => array_map('betRecord', $query->fetchAll())]);
+        $rows = $query->fetchAll();
+        $records = [];
+        foreach ($rows as $row) {
+            $record = betRecord($row);
+            if ((bool)$row['payment_approved'] && (bool)$row['opponent_payment_approved']) {
+                $record['opponentRoomCode'] = $row['opponent_room_code'];
+            } else {
+                $record['roomCode'] = null;
+                $record['opponentRoomCode'] = null;
+            }
+            $records[] = $record;
+        }
+        respond(['bets' => $records]);
     }
 
     if ($action === 'bets.create') {
@@ -397,6 +420,8 @@ try {
         }
         $fixture = null;
         $pick = null;
+        $teamName = null;
+        $teamStrength = null;
         if ($type === 'football') {
             $fixture = findFixture((string)($data['fixtureId'] ?? ''));
             $pick = trim((string)($data['pick'] ?? ''));
@@ -406,6 +431,12 @@ try {
             $kickoff = (int)($fixture['starts'] / 1000);
             if ($kickoff - 30 * 60 <= time()) {
                 respond(['error' => 'Football betting closes 30 minutes before kick-off.'], 409);
+            }
+        } else {
+            $teamName = trim((string)($data['teamName'] ?? ''));
+            $teamStrength = filter_var($data['teamStrength'] ?? null, FILTER_VALIDATE_INT);
+            if (mb_strlen($teamName) < 2 || mb_strlen($teamName) > 100 || $teamStrength === false || $teamStrength < 1 || $teamStrength > 9999) {
+                respond(['error' => 'Enter your eFootball team name and team strength from 1 to 9,999.'], 422);
             }
         }
 
@@ -428,22 +459,19 @@ try {
                 respond(['error' => 'A rematch with this player is available only after the previous result is recorded.'], 409);
             }
 
-            $deadline = $type === 'football'
-                ? gmdate('Y-m-d H:i:s', (int)($fixture['starts'] / 1000) - 30 * 60)
-                : gmdate('Y-m-d H:i:s', time() + 5 * 60);
             $status = 'open';
             $opponentId = null;
             if ($opponentBet) {
-                $status = 'awaiting_payment';
+                $status = 'matched';
                 $opponentId = (int)$opponentBet['id'];
-                $update = $db->prepare('UPDATE bets SET matched_bet_id = NULL, status = ?, pay_deadline = ? WHERE id = ?');
-                $update->execute(['awaiting_payment', $deadline, $opponentId]);
+                $update = $db->prepare("UPDATE bets SET status = 'matched', pay_deadline = NULL WHERE id = ?");
+                $update->execute([$opponentId]);
             }
 
             $insert = $db->prepare(
                 'INSERT INTO bets (user_id, bet_type, fixture_id, fixture_home, fixture_away, kickoff_at,
-                                   selection, stake, status, pay_deadline)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                   selection, team_name, team_strength, stake, status, pay_deadline)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $insert->execute([
                 $user['id'],
@@ -453,9 +481,11 @@ try {
                 $fixture['away'] ?? null,
                 isset($fixture['starts']) ? gmdate('Y-m-d H:i:s', (int)($fixture['starts'] / 1000)) : null,
                 $pick,
+                $teamName,
+                $teamStrength,
                 $stake,
                 $status,
-                $opponentBet ? $deadline : null
+                null
             ]);
             $betId = (int)$db->lastInsertId();
             if ($opponentId !== null) {
@@ -507,17 +537,19 @@ try {
                 if ($action === 'bets.pay') {
                     $reference = strtoupper(trim((string)($data['paymentReference'] ?? '')));
                     $method = $data['paymentMethod'] ?? '';
-                    if ($bet['status'] !== 'awaiting_payment' || $bet['user_paid'] || !in_array($method, ['send_money', 'till'], true) || !preg_match('/^[A-Z0-9-]{6,40}$/', $reference)) {
+                    $senderName = trim((string)($data['paymentSenderName'] ?? ''));
+                    if ($bet['status'] !== 'awaiting_payment' || $bet['user_paid'] || !in_array($method, ['send_money', 'till'], true) || !preg_match('/^[A-Z0-9-]{6,40}$/', $reference) || mb_strlen($senderName) < 2 || mb_strlen($senderName) > 100 || ($data['paidFromRegisteredNumber'] ?? false) !== true) {
                         $db->rollBack();
-                        respond(['error' => 'Choose Send Money or Till and enter a transaction reference (6–40 letters, numbers, or hyphens).'], 422);
+                        respond(['error' => 'Confirm the registered M-Pesa number and enter the sender name shown on the Safaricom message and a valid reference.'], 422);
                     }
-                    $update = $db->prepare('UPDATE bets SET user_paid = 1, payment_method = ?, payment_reference = ? WHERE id = ?');
-                    $update->execute([$method, $reference, $betId]);
+                    $update = $db->prepare('UPDATE bets SET user_paid = 1, paid_from_registered_number = 1, payment_sender_name = ?, payment_method = ?, payment_reference = ? WHERE id = ?');
+                    $update->execute([$senderName, $method, $reference, $betId]);
                 } else {
                     $code = trim((string)($data['roomCode'] ?? ''));
-                    if ($bet['bet_type'] !== 'konami' || !$bet['user_paid'] || !$bet['payment_approved'] || $bet['status'] !== 'awaiting_code' || $code === '' || mb_strlen($code) > 40) {
+                    $opponent = loadBet($db, (int)$bet['matched_bet_id'], true);
+                    if ($bet['bet_type'] !== 'konami' || !$bet['user_paid'] || !$bet['payment_approved'] || !$opponent || !$opponent['user_paid'] || !$opponent['payment_approved'] || $bet['status'] !== 'awaiting_code' || $code === '' || mb_strlen($code) > 40) {
                         $db->rollBack();
-                        respond(['error' => 'Wait for admin payment approval, then provide an eFootball room code of up to 40 characters.'], 409);
+                        respond(['error' => 'Both players must submit a reference and have admin-approved payments before either room code can be shared.'], 409);
                     }
                     $update = $db->prepare('UPDATE bets SET room_code = ? WHERE id = ?');
                     $update->execute([$code, $betId]);
@@ -602,9 +634,11 @@ try {
         $db->beginTransaction();
         try {
             $bet = loadBet($db, (int)$betId, true);
-            if (!$bet || !$bet['matched_bet_id'] || $bet['status'] !== 'awaiting_payment' || !$bet['user_paid'] || !$bet['payment_reference']) {
+            if (!$bet || !$bet['matched_bet_id'] || $bet['status'] !== 'awaiting_payment'
+                || !$bet['user_paid'] || !$bet['payment_reference']
+                || !$bet['payment_sender_name'] || !(bool)$bet['paid_from_registered_number']) {
                 $db->rollBack();
-                respond(['error' => 'This matched player has no pending payment reference to approve.'], 409);
+                respond(['error' => 'A payment reference, Safaricom sender name, and registered-number confirmation are required before approval.'], 409);
             }
             assertBeforeDeadline($bet);
             $update = $db->prepare('UPDATE bets SET payment_approved = 1 WHERE id = ?');
@@ -618,6 +652,46 @@ try {
             throw $error;
         }
         respond(['ok' => true]);
+    }
+
+    if ($action === 'admin.requestPayment') {
+        requireAdmin($db);
+        $betId = filter_var($data['betId'] ?? null, FILTER_VALIDATE_INT);
+        if (!$betId) {
+            respond(['error' => 'A valid matched bet is required.'], 422);
+        }
+        $db->beginTransaction();
+        try {
+            $bet = loadBet($db, (int)$betId, true);
+            if (!$bet || !$bet['matched_bet_id'] || $bet['status'] !== 'matched') {
+                $db->rollBack();
+                respond(['error' => 'Only a newly matched pair can be sent a payment request.'], 409);
+            }
+            $opponent = loadBet($db, (int)$bet['matched_bet_id'], true);
+            if (!$opponent || $opponent['status'] !== 'matched') {
+                $db->rollBack();
+                respond(['error' => 'The matched pair is no longer awaiting a payment request.'], 409);
+            }
+            if ($bet['bet_type'] === 'football') {
+                $kickoff = strtotime((string)$bet['kickoff_at']);
+                if ($kickoff - 30 * 60 <= time()) {
+                    $db->rollBack();
+                    respond(['error' => 'Football payment requests close 30 minutes before kick-off.'], 409);
+                }
+                $deadline = gmdate('Y-m-d H:i:s', $kickoff - 30 * 60);
+            } else {
+                $deadline = gmdate('Y-m-d H:i:s', time() + 5 * 60);
+            }
+            $update = $db->prepare("UPDATE bets SET status = 'awaiting_payment', pay_deadline = ? WHERE id IN (?, ?)");
+            $update->execute([$deadline, $bet['id'], $opponent['id']]);
+            $db->commit();
+        } catch (Throwable $error) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $error;
+        }
+        respond(['ok' => true, 'deadline' => strtotime($deadline) * 1000]);
     }
 
     if ($action === 'admin.dashboard') {
@@ -634,6 +708,8 @@ try {
                     other.payment_approved AS opponent_payment_approved,
                     other.user_paid AS opponent_user_paid,
                     other.payment_method AS opponent_payment_method,
+                    other.payment_sender_name AS opponent_payment_sender_name,
+                    other.paid_from_registered_number AS opponent_paid_from_registered_number,
                     opponent_report.claimed_result AS opponent_report,
                     opponent_report.score AS opponent_score
              FROM bets b
@@ -656,8 +732,10 @@ try {
                 'myScore' => $row['my_score'],
                 'opponentScore' => $row['opponent_score'],
                 'opponentPaymentReference' => $row['opponent_payment_reference'],
+                'opponentPaymentSenderName' => $row['opponent_payment_sender_name'],
                 'opponentPaymentApproved' => (bool)$row['opponent_payment_approved'],
-                'opponentUserPaid' => (bool)$row['opponent_user_paid']
+                'opponentUserPaid' => (bool)$row['opponent_user_paid'],
+                'opponentPaidFromRegisteredNumber' => (bool)$row['opponent_paid_from_registered_number']
             ];
         }
         respond(['bets' => $bets]);

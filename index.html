@@ -20,10 +20,6 @@
           <button class="nav-item" data-view="konami"><span class="nav-icon">⌘</span> eFootball 1v1</button>
           <button class="nav-item" data-view="my-bets"><span class="nav-icon">▤</span> My bets <span class="nav-count" id="my-bets-count">0</span></button>
         </nav>
-        <div class="sidebar-label admin-label">MANAGE</div>
-        <nav class="main-nav" aria-label="Management">
-          <button class="nav-item" data-view="admin"><span class="nav-icon">▦</span> Admin dashboard</button>
-        </nav>
         <div class="sidebar-spacer"></div>
         <div class="account-card">
           <div class="avatar" id="sidebar-avatar">?</div>
@@ -37,6 +33,7 @@
         <header class="topbar">
           <div class="mobile-brand"><span class="brand-mark">M</span> matchmate</div>
           <div class="topbar-note"><span class="live-dot"></span> Peer-to-peer play, made simple</div>
+          <a class="top-account admin-page-link" id="admin-page-link" href="admin.php" hidden>Admin dashboard <span>↗</span></a>
           <button class="top-account" id="top-account-button">Sign in <span>↗</span></button>
         </header>
 
@@ -103,8 +100,12 @@
             <div class="panel konami-panel">
               <div class="panel-top"><span class="panel-kicker">NEW CHALLENGE</span><span class="pill pill-green">eFootball</span></div>
               <h2>Ready when you are.</h2>
-              <p class="muted">We’ll find a player who wants the same stake. Once matched, both players pay and share their in-game room code before playing.</p>
+              <p class="muted">We’ll find a player who wants the same stake. Add your eFootball team and team strength to your request. Room codes unlock only after both payments are verified.</p>
               <form id="konami-form" class="bet-form">
+                <label for="konami-team">Your eFootball team name</label>
+                <input class="form-control" id="konami-team" type="text" maxlength="100" required placeholder="Enter the team or squad name">
+                <label for="konami-strength">Team strength <span class="label-hint">as shown in eFootball</span></label>
+                <input class="form-control" id="konami-strength" type="number" min="1" max="9999" step="1" required placeholder="For example, 3100">
                 <label for="konami-stake">Stake amount <span class="label-hint">KES · minimum 50</span></label>
                 <div class="input-wrap"><span class="currency">KES</span><input id="konami-stake" type="number" min="50" step="1" value="500" required></div>
                 <div class="stake-presets"><button type="button" data-stake="200">200</button><button type="button" data-stake="500">500</button><button type="button" data-stake="1000">1,000</button></div>
@@ -136,25 +137,6 @@
           <div class="player-totals" id="player-totals"></div>
           <div class="admin-disclaimer" id="fee-notice"></div>
           <div id="my-bets-list" class="bets-list"></div>
-        </section>
-
-        <section class="view" id="view-admin">
-          <div class="page-heading admin-page-heading">
-            <div><div class="eyebrow"><span class="eyebrow-line"></span> OPERATIONS</div><h1>Admin overview<span class="heading-period">.</span></h1><p>Review matches, confirm results, and track manual payouts.</p></div>
-            <div class="admin-demo-pill"><span class="live-dot"></span> LOCAL DEMO DATA</div>
-          </div>
-          <div class="admin-stats">
-            <div class="admin-stat-card"><span>OPEN MATCHES</span><strong id="admin-open">0</strong><small>Awaiting a player</small></div>
-            <div class="admin-stat-card"><span>PAYMENT REVIEW</span><strong id="admin-payment">0</strong><small>References awaiting admin approval</small></div>
-            <div class="admin-stat-card"><span>WINNERS TO PAY</span><strong id="admin-winners">0</strong><small>Manual payout required</small></div>
-            <div class="admin-stat-card"><span>MANAGER FEES EARNED</span><strong id="admin-fees">KES 0</strong><small>10% of resolved winning pots</small></div>
-            <div class="admin-stat-card accent-stat"><span>TOTAL TO PAY</span><strong id="admin-total">KES 0</strong><small>After 10% manager fee</small></div>
-          </div>
-          <div class="admin-toolbar"><div><h2>Winner payouts</h2><p>Winner and opponent details are visible to the admin.</p></div><button class="secondary-button" id="export-winners">↓ Export list</button></div>
-          <div class="table-wrap"><table class="admin-table"><thead><tr><th>WINNER / ACCOUNT</th><th>LOSING OPPONENT</th><th>BET</th><th>MANAGER FEE</th><th>AMOUNT TO RECEIVE</th><th>SEND MONEY FEE</th><th>M-PESA DETAILS</th><th>STATUS</th><th></th></tr></thead><tbody id="winners-table"></tbody></table></div>
-          <div class="admin-toolbar queue-toolbar"><div><h2>Matched players &amp; payment review</h2><p>Players are paired before payment. Both equal stakes and payment references are shown together.</p></div></div>
-          <div class="table-wrap"><table class="admin-table queue-table"><thead><tr><th>PLAYER / ACCOUNT</th><th>TYPE</th><th>FIXTURE / RESULT CLAIM</th><th>OPPONENT</th><th>STAKE EACH</th><th>PAYMENT REFERENCES</th><th>MATCH STATUS</th><th>ADMIN ACTION</th></tr></thead><tbody id="queue-table"></tbody></table></div>
-          <div class="admin-disclaimer">This prototype stores records in MySQL. Payment references must be checked manually in the M-Pesa account; no payment is initiated or automatically verified. Player result agreement is not independent proof of an eFootball result.</div>
         </section>
 
         <footer class="site-footer"><span>match<span class="brand-light">mate</span> <span class="footer-copy">· Play fair. Win together.</span> · <a href="terms.html">Terms &amp; Conditions</a></span><span>DEMO EXPERIENCE · NO REAL MONEY</span></footer>
